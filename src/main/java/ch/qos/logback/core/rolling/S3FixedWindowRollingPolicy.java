@@ -12,37 +12,41 @@ import com.amazonaws.services.s3.AmazonS3Client;
 
 /**
  * Extension of FixedWindowRollingPolicy.
- *
+ * <p/>
  * On each rolling event (which is defined by <triggeringPolicy>), this policy does:
  * 1. Regular log file rolling as FixedWindowsRollingPolicy does
  * 2. Upload the rolled log file to S3 bucket
- *
+ * <p/>
  * Also, this policy uploads the active log file on JVM exit. If rollingOnExit is true,
  * another log rolling happens and a rolled log is uploaded. If rollingOnExit is false,
  * the active file is directly uploaded.
- *
+ * <p/>
  * If rollingOnExit is false and if no rolling happened before JVM exits, this rolling
  * policy uploads the active log file as it is.
  */
 public class S3FixedWindowRollingPolicy extends FixedWindowRollingPolicy {
 
-    ExecutorService executor = Executors.newFixedThreadPool(1);
+    private ExecutorService executor = Executors.newFixedThreadPool(1);
 
-    String awsAccessKey;
-    String awsSecretKey;
-    String s3BucketName;
-    String s3FolderName;
+    private String awsAccessKey;
+    private String awsSecretKey;
+    private String s3BucketName;
+    private String s3FolderName;
 
-    boolean rollingOnExit = true;
+    private boolean rollingOnExit = true;
 
-    AmazonS3Client s3Client;
+    private AmazonS3Client s3Client;
 
-    protected AmazonS3Client getS3Client() {
+    protected synchronized  AmazonS3Client getS3Client() {
         if (s3Client == null) {
-            AWSCredentials cred = new BasicAWSCredentials(getAwsAccessKey(), getAwsSecretKey());
-            s3Client = new AmazonS3Client(cred);
+            AWSCredentials cred = credentials();
+            s3Client = cred != null ? new AmazonS3Client(cred) : new AmazonS3Client();
         }
         return s3Client;
+    }
+
+    private AWSCredentials credentials() {
+        return getAwsAccessKey() != null && getAwsSecretKey() != null ? new BasicAWSCredentials(getAwsAccessKey(), getAwsSecretKey()) : null;
     }
 
     @Override
@@ -70,7 +74,7 @@ public class S3FixedWindowRollingPolicy extends FixedWindowRollingPolicy {
         }
 
         // add the S3 folder name in front if specified
-        final StringBuffer s3ObjectName = new StringBuffer();
+        final StringBuilder s3ObjectName = new StringBuilder();
         if (getS3FolderName() != null) {
             s3ObjectName.append(getS3FolderName()).append("/");
         }
